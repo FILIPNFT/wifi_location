@@ -1,0 +1,3 @@
+/home/parallels/CLionProjects/ATF/cmake-build-debug/CMakeFiles/ATF.dir
+/home/parallels/CLionProjects/ATF/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/parallels/CLionProjects/ATF/cmake-build-debug/CMakeFiles/rebuild_cache.dir

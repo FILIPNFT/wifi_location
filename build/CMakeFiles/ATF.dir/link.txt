@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/ATF.dir/google_geolocation.c.o -o ATF  -ljansson /usr/lib/aarch64-linux-gnu/libcurl.so 
