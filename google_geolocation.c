@@ -48,7 +48,7 @@ void get_address_from_coordinates(double lat, double lng) {
     struct string s;
     init_string(&s);
 
-    snprintf(api_url, sizeof(api_url), "https://maps.googleapis.com/maps/api/geocode/json?latlng=%f,%f&key=AIzaSyDOZ8eV3dLiiqwpqGk1Fy9Hjsw-L89wNyE", lat, lng);
+    snprintf(api_url, sizeof(api_url), "https://maps.googleapis.com/maps/api/geocode/json?latlng=%f,%f&key=", lat, lng);
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
     curl = curl_easy_init();
@@ -100,7 +100,7 @@ void get_address_from_coordinates(double lat, double lng) {
 int main(void) {
     CURL *curl;
     CURLcode res;
-    char* api_url = "https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyDOZ8eV3dLiiqwpqGk1Fy9Hjsw-L89wNyE";
+    char* api_url = "https://www.googleapis.com/geolocation/v1/geolocate?key=";
 
     struct string s;
     init_string(&s);
