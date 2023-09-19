@@ -1,0 +1,3 @@
+/Volumes/My Files/UUP/ATF3_0/cmake-build-debug/CMakeFiles/ATF3_0.dir
+/Volumes/My Files/UUP/ATF3_0/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Volumes/My Files/UUP/ATF3_0/cmake-build-debug/CMakeFiles/rebuild_cache.dir
