@@ -38,13 +38,13 @@ char* getWiFiData() {
     char *line = NULL;
     size_t len = 0;
 
-    char *jsonPayload = malloc(4096 * sizeof(char)); // Increased buffer size
+    char *jsonPayload = malloc(4096 * sizeof(char));
     if (!jsonPayload) {
         perror("Failed to allocate memory");
         exit(EXIT_FAILURE);
     }
 
-    strcpy(jsonPayload, "{\"considerIp\":\"false\",\"wifiAccessPoints\":[");
+    strcpy(jsonPayload, "{\"considerIp\":\"false\",\"wifiAccessPoints\":[\n");
 
     system("sudo /System/Library/PrivateFrameworks/Apple80211.framework/Resources/airport -s > output.txt");
 
@@ -59,28 +59,47 @@ char* getWiFiData() {
     if (getline(&line, &len, fp) == -1) {
         perror("Failed to read line");
         free(jsonPayload);
-        pclose(fp);
+        fclose(fp);
         exit(EXIT_FAILURE);
     }
 
     while (getline(&line, &len, fp) != -1) {
-        char *ssid = strtok(line, " ");
+        char *ssid = strtok(line, ":");
         char *bssid = strtok(NULL, " ");
         char *rssi = strtok(NULL, " ");
 
+        size_t ssid_len = strlen(ssid);
 
-        // Ensuring there is enough space to add more data to jsonPayload
-        if (strlen(jsonPayload) + strlen(ssid) + strlen(bssid) + strlen(rssi) + 100 >= 4096) {
+        char new_bssid[18];
+        if(ssid_len >= 3) {
+            char ssid_end[3];
+            strncpy(ssid_end, &ssid[ssid_len - 2], 2);
+            ssid_end[2] = '\0';
+
+            snprintf(new_bssid, sizeof(new_bssid), "%s:%s", ssid_end, bssid);
+
+            ssid[ssid_len - 3] = '\0';
+
+            //printf("New SSID: %s\n", ssid);
+            //printf("New BSSID: %s\n", new_bssid);
+            //printf("RSSI: %s\n", rssi);
+        }
+        else {
+            strncpy(new_bssid, bssid, sizeof(new_bssid) - 1);
+            new_bssid[sizeof(new_bssid) - 1] = '\0';
+        }
+
+        if (strlen(jsonPayload) + strlen(ssid) + strlen(new_bssid) + strlen(rssi) + 100 >= 4096) {
             fprintf(stderr, "Buffer size is insufficient\n");
             free(line);
             free(jsonPayload);
-            pclose(fp);
+            fclose(fp);
             exit(EXIT_FAILURE);
         }
 
         strcat(jsonPayload, "{\"macAddress\":");
         strcat(jsonPayload,"\"");
-        strcat(jsonPayload, bssid);
+        strcat(jsonPayload, new_bssid);
         strcat(jsonPayload,"\",");
         strcat(jsonPayload, "\"signalStrength\":");
         strcat(jsonPayload,"\"");
@@ -91,11 +110,11 @@ char* getWiFiData() {
         strcat(jsonPayload, ssid);
         strcat(jsonPayload,"\"");
         strcat(jsonPayload, "},");
+        strcat(jsonPayload, "\n");
     }
 
-    // Replace the last comma with a closing bracket to end the JSON array
-    jsonPayload[strlen(jsonPayload) - 1] = ']';
-    strcat(jsonPayload, "}");
+    jsonPayload[strlen(jsonPayload) - 2] = ']';
+    strcat(jsonPayload, "\n}");
 
     fclose(fp);
 
@@ -104,6 +123,67 @@ char* getWiFiData() {
     }
 
     return jsonPayload;
+}
+json_object* getAddressDetails(const char* lat, const char* lng) {
+    CURL *curl;
+    CURLcode res;
+    json_object *parsed_json = NULL;
+
+    curl = curl_easy_init();
+    if(curl) {
+        struct string s;
+        init_string(&s);
+
+        char url[256];
+        snprintf(url, sizeof(url), "https://maps.googleapis.com/maps/api/geocode/json?latlng=%s,%s&key=", lat, lng);
+
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+        res = curl_easy_perform(curl);
+
+        if(res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        }
+        else {
+            parsed_json = json_tokener_parse(s.ptr);
+        }
+
+        curl_easy_cleanup(curl);
+        free(s.ptr);
+    }
+    return parsed_json;
+}
+
+json_object* getElevationDetails(const char* lat, const char* lng) {
+    CURL *curl;
+    CURLcode res;
+    json_object *parsed_json = NULL;
+
+    curl = curl_easy_init();
+    if(curl) {
+        struct string s;
+        init_string(&s);
+
+        char url[256];
+        snprintf(url, sizeof(url), "https://maps.googleapis.com/maps/api/elevation/json?locations=%s,%s&key=", lat, lng);
+
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+        res = curl_easy_perform(curl);
+
+        if(res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        }
+        else {
+            parsed_json = json_tokener_parse(s.ptr);
+        }
+
+        curl_easy_cleanup(curl);
+        free(s.ptr);
+    }
+    return parsed_json;
 }
 
 
@@ -116,16 +196,15 @@ int main() {
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     curl = curl_easy_init();
-    if(curl) {
+    if (curl) {
         struct string s;
         init_string(&s);
 
         char *jsonData = getWiFiData();
-        //printf("%s", jsonData);
+        //printf("%s\n", jsonData);
 
-        curl_easy_setopt(curl, CURLOPT_URL, "https://www.googleapis.com/geolocation/v1/geolocate?key=AIzaSyDOZ8eV3dLiiqwpqGk1Fy9Hjsw-L89wNyE");
+        curl_easy_setopt(curl, CURLOPT_URL,"https://www.googleapis.com/geolocation/v1/geolocate?key=");
 
-        // Set the header content-type
         headers = curl_slist_append(headers, "Content-Type: application/json");
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
@@ -137,14 +216,11 @@ int main() {
 
         res = curl_easy_perform(curl);
 
-        if(res != CURLE_OK) {
+        if (res != CURLE_OK) {
             fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-        }
-        else {
-            // Print the raw JSON response for debugging
+        } else {
             //printf("Raw JSON response: %s\n", s.ptr);
 
-            // Parse the JSON response
             json_object *parsed_json;
             json_object *location;
             json_object *lat;
@@ -161,19 +237,37 @@ int main() {
             printf("Latitude: %s\n", json_object_get_string(lat));
             printf("Longitude: %s\n", json_object_get_string(lng));
             printf("Accuracy: %s meters\n", json_object_get_string(accuracy));
-            //printf("Locaton: %s meters\n", json_object_get_string(location));
+            json_object *addressDetails = getAddressDetails(json_object_get_string(lat), json_object_get_string(lng));
+            if (addressDetails != NULL) {
+                json_object *formatted_address;
+                json_object_object_get_ex(addressDetails, "results", &formatted_address);
+                formatted_address = json_object_array_get_idx(formatted_address, 0);
+                json_object_object_get_ex(formatted_address, "formatted_address", &formatted_address);
+                printf("Address: %s\n", json_object_get_string(formatted_address));
 
-            // Clean up JSON object
-            json_object_put(parsed_json);
+                json_object_put(addressDetails);
+            }
+
+            json_object *elevationDetails = getElevationDetails(json_object_get_string(lat),json_object_get_string(lng));
+
+            if (elevationDetails != NULL) {
+                json_object *elevation;
+                json_object_object_get_ex(elevationDetails, "results", &elevation);
+                elevation = json_object_array_get_idx(elevation, 0);
+                json_object_object_get_ex(elevation, "elevation", &elevation);
+                printf("Elevation: %f meters\n", json_object_get_double(elevation));
+
+                json_object_put(parsed_json);
+            }
+            curl_slist_free_all(headers);
+
+            curl_easy_cleanup(curl);
+            free(s.ptr);
+            free(jsonData);
         }
-        curl_slist_free_all(headers);
 
-        curl_easy_cleanup(curl);
-        free(s.ptr);
-        free(jsonData);
+        curl_global_cleanup();
+
+        return 0;
     }
-
-    curl_global_cleanup();
-
-    return 0;
 }
